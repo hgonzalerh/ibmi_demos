@@ -1,0 +1,89 @@
+---
+- name: IBM i Sysadmin & Database Automation Demo
+  hosts: all
+  gather_facts: false
+
+  vars:
+    demo_library: "DEMOLIB"
+
+  tasks:
+
+    # -------------------------------------------------------------------
+    # STAGE 1: SYSTEM HEALTH & CL COMMANDS
+    # -------------------------------------------------------------------
+    - name: "Stage 1: Gather IBM i Facts"
+      ibm.power_ibmi.ibmi_facts:
+        filter: "os_level, cpu_details"
+      register: ibmi_facts_out
+
+    - name: "Stage 1: Display IBM i Version"
+      ansible.builtin.debug:
+        msg: "Target system is running IBM i Version {{ ibmi_facts_out.ansible_facts.os_level }}"
+
+    - name: "Stage 1: Check System Status (CL Command)"
+      ibm.power_ibmi.ibmi_cl_command:
+        cmd: "WRKSYSSTS"
+      register: syssts_out
+
+    # -------------------------------------------------------------------
+    # STAGE 2: DATABASE CREATION & INGESTION
+    # -------------------------------------------------------------------
+    - name: "Stage 2: Create Target Library (Folder equivalent)"
+      ibm.power_ibmi.ibmi_cl_command:
+        cmd: "CRTLIB LIB({{ demo_library }}) TEXT('AAP Automation Demo Library')"
+      ignore_errors: true  # Prevents failure if library already exists
+
+    - name: "Stage 2: Create SQL Table inside DB2"
+      ibm.power_ibmi.ibmi_sql_execute:
+        sql: |
+          CREATE TABLE {{ demo_library }}.CUSTOMERS (
+            CUST_ID INT PRIMARY KEY,
+            CUST_NAME VARCHAR(50),
+            STATUS VARCHAR(20),
+            CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+      ignore_errors: true
+
+    - name: "Stage 2: Insert Sample Data into DB2 Table"
+      ibm.power_ibmi.ibmi_sql_execute:
+        sql: |
+          INSERT INTO {{ demo_library }}.CUSTOMERS (CUST_ID, CUST_NAME, STATUS) 
+          VALUES 
+            (101, 'Acme Corp', 'ACTIVE'),
+            (102, 'Globex Inc', 'PENDING'),
+            (103, 'Initech', 'ACTIVE');
+
+    # -------------------------------------------------------------------
+    # STAGE 3: BATCH JOB PROCESSING
+    # -------------------------------------------------------------------
+    - name: "Stage 3: Submit a Batch Job to QBATCH Queue (Simulating 10s processing job)"
+      ibm.power_ibmi.ibmi_submit_job:
+        cmd: "DLYJOB DLS(10)"  # Delay job command acts as a mock batch workload
+        parameters: "JOB(AAP_MOCK_JOB) JOBQ(QBATCH)"
+        status: ['*COMPLETE']   # Waits until batch job completes
+        time_out: '60s'
+      register: batch_result
+
+    - name: "Stage 3: Display Batch Job Status"
+      ansible.builtin.debug:
+        msg: "Batch Job Completed with Job ID: {{ batch_result.job_id }}"
+
+    # -------------------------------------------------------------------
+    # STAGE 4: QUERY & REPORTING
+    # -------------------------------------------------------------------
+    - name: "Stage 4: Query Database Table"
+      ibm.power_ibmi.ibmi_sql_query:
+        sql: "SELECT CUST_ID, CUST_NAME, STATUS FROM {{ demo_library }}.CUSTOMERS WHERE STATUS = 'ACTIVE'"
+      register: db_query_out
+
+    - name: "Stage 4: Print Active Customers from IBM i DB2"
+      ansible.builtin.debug:
+        var: db_query_out.row
+
+    # -------------------------------------------------------------------
+    # STAGE 5: CLEANUP (OPTIONAL)
+    # -------------------------------------------------------------------
+    - name: "Stage 5: Delete Demo Library (Cleanup)"
+      ibm.power_ibmi.ibmi_cl_command:
+        cmd: "DLTLIB LIB({{ demo_library }})"
+      when: clean_up | default(false) | bool
