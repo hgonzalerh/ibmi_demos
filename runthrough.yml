@@ -46,6 +46,11 @@
             CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP
           )
 
+      register: create_table_out
+      failed_when:
+        - create_table_out.rc != 0
+        # Fail ONLY IF error is NOT 'SQL0601' (Table already exists)
+        - "'SQL0601' not in (create_table_out.job_log | default([]) | map(attribute='MESSAGE_ID') | list)"
     - name: "Stage 2: Populate Data (Idempotent Insert)"
       ibm.power_ibmi.ibmi_sql_execute:
         sql: |
