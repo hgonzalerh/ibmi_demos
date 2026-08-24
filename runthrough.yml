@@ -13,12 +13,11 @@
     # -------------------------------------------------------------------
     - name: "Stage 1: Gather IBM i Facts"
       ibm.power_ibmi.ibmi_facts:
-        # filter: "os_level, cpu_details"
       register: ibmi_facts_out
 
     - name: "Stage 1: Display IBM i Version"
       ansible.builtin.debug:
-        msg: "Target system is running IBM i Version {{ ibmi_facts_out }}"
+        msg: "Target system is running IBM i Version {{ ibmi_facts_out.ansible_facts.os_level }}"
 
     - name: "Stage 1: Check System Status (CL Command)"
       ibm.power_ibmi.ibmi_cl_command:
@@ -26,18 +25,13 @@
       register: syssts_out
 
     # -------------------------------------------------------------------
-    # STAGE 2: DATABASE CREATION & INGESTION
+    # STAGE 2: DATABASE CREATION & INGESTION (Idempotent SQL)
     # -------------------------------------------------------------------
-    - name: "Stage 2: Create Target Library (Folder equivalent)"
-      ibm.power_ibmi.ibmi_cl_command:
-        cmd: "CRTLIB LIB({{ demo_library }}) TEXT('AAP Automation Demo Library')"
-      ignore_errors: true  # Prevents failure if library already exists
-
-    - name: "Create Target Schema (Idempotent)"
+    - name: "Stage 2: Create Target Schema (Auto-creates Library and Journaling)"
       ibm.power_ibmi.ibmi_sql_execute:
         sql: "CREATE SCHEMA IF NOT EXISTS {{ demo_library }}"
-    
-    - name: "Create SQL Table inside DB2 (Idempotent)"
+
+    - name: "Stage 2: Create SQL Table inside DB2"
       ibm.power_ibmi.ibmi_sql_execute:
         sql: |
           CREATE TABLE IF NOT EXISTS {{ demo_library }}.CUSTOMERS (
@@ -45,7 +39,22 @@
             CUST_NAME VARCHAR(50),
             STATUS VARCHAR(20),
             CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-          ) WITH NC
+          )
+
+    - name: "Stage 2: Populate Data (Idempotent Insert)"
+      ibm.power_ibmi.ibmi_sql_execute:
+        sql: |
+          INSERT INTO {{ demo_library }}.CUSTOMERS (CUST_ID, CUST_NAME, STATUS)
+          SELECT 101, 'Acme Corp', 'ACTIVE' FROM SYSIBM.SYSDUMMY1
+          WHERE NOT EXISTS (SELECT 1 FROM {{ demo_library }}.CUSTOMERS WHERE CUST_ID = 101);
+
+          INSERT INTO {{ demo_library }}.CUSTOMERS (CUST_ID, CUST_NAME, STATUS)
+          SELECT 102, 'Globex Inc', 'PENDING' FROM SYSIBM.SYSDUMMY1
+          WHERE NOT EXISTS (SELECT 1 FROM {{ demo_library }}.CUSTOMERS WHERE CUST_ID = 102);
+
+          INSERT INTO {{ demo_library }}.CUSTOMERS (CUST_ID, CUST_NAME, STATUS)
+          SELECT 103, 'Initech', 'ACTIVE' FROM SYSIBM.SYSDUMMY1
+          WHERE NOT EXISTS (SELECT 1 FROM {{ demo_library }}.CUSTOMERS WHERE CUST_ID = 103);
 
     # -------------------------------------------------------------------
     # STAGE 3: BATCH JOB PROCESSING
@@ -77,7 +86,7 @@
     # -------------------------------------------------------------------
     # STAGE 5: CLEANUP (OPTIONAL)
     # -------------------------------------------------------------------
-    - name: "Stage 5: Delete Demo Library (Cleanup)"
-      ibm.power_ibmi.ibmi_cl_command:
-        cmd: "DLTLIB LIB({{ demo_library }})"
+    - name: "Stage 5: Delete Demo Schema & Library (Idempotent Cleanup)"
+      ibm.power_ibmi.ibmi_sql_execute:
+        sql: "DROP SCHEMA IF EXISTS {{ demo_library }} CASCADE"
       when: clean_up | default(false) | bool
