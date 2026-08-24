@@ -13,12 +13,12 @@
     # -------------------------------------------------------------------
     - name: "Stage 1: Gather IBM i Facts"
       ibm.power_ibmi.ibmi_facts:
-        filter: "os_level, cpu_details"
+        # filter: "os_level, cpu_details"
       register: ibmi_facts_out
 
     - name: "Stage 1: Display IBM i Version"
       ansible.builtin.debug:
-        msg: "Target system is running IBM i Version {{ ibmi_facts_out.ansible_facts }}"
+        msg: "Target system is running IBM i Version {{ ibmi_facts_out }}"
 
     - name: "Stage 1: Check System Status (CL Command)"
       ibm.power_ibmi.ibmi_cl_command:
