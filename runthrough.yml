@@ -18,7 +18,7 @@
 
     - name: "Stage 1: Display IBM i Version"
       ansible.builtin.debug:
-        msg: "Target system is running IBM i Version {{ ibmi_facts_out.ansible_facts.os_level }}"
+        msg: "Target system is running IBM i Version {{ ibmi_facts_out.ansible_facts }}"
 
     - name: "Stage 1: Check System Status (CL Command)"
       ibm.power_ibmi.ibmi_cl_command:
