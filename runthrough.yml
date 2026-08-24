@@ -56,20 +56,20 @@
         - create_table_out.rc != 0
         # Fail ONLY IF error is NOT 'SQL0601' (Table already exists)
         - "'SQL0601' not in (create_table_out.job_log | default([]) | map(attribute='MESSAGE_ID') | list)"
-    - name: "Stage 2: Populate Data (Idempotent Insert)"
+        
+    - name: "Stage 2: Populate Data (Idempotent Insert with No Commit)"
       ibm.power_ibmi.ibmi_sql_execute:
         sql: |
           INSERT INTO {{ demo_library }}.CUSTOMERS (CUST_ID, CUST_NAME, STATUS)
-          SELECT 101, 'Acme Corp', 'ACTIVE' FROM SYSIBM.SYSDUMMY1
-          WHERE NOT EXISTS (SELECT 1 FROM {{ demo_library }}.CUSTOMERS WHERE CUST_ID = 101);
-
-          INSERT INTO {{ demo_library }}.CUSTOMERS (CUST_ID, CUST_NAME, STATUS)
-          SELECT 102, 'Globex Inc', 'PENDING' FROM SYSIBM.SYSDUMMY1
-          WHERE NOT EXISTS (SELECT 1 FROM {{ demo_library }}.CUSTOMERS WHERE CUST_ID = 102);
-
-          INSERT INTO {{ demo_library }}.CUSTOMERS (CUST_ID, CUST_NAME, STATUS)
-          SELECT 103, 'Initech', 'ACTIVE' FROM SYSIBM.SYSDUMMY1
-          WHERE NOT EXISTS (SELECT 1 FROM {{ demo_library }}.CUSTOMERS WHERE CUST_ID = 103);
+          SELECT * FROM (
+            VALUES 
+              (101, 'Acme Corp', 'ACTIVE'),
+              (102, 'Globex Inc', 'PENDING'),
+              (103, 'Initech', 'ACTIVE')
+          ) AS src(CUST_ID, CUST_NAME, STATUS)
+          WHERE NOT EXISTS (
+            SELECT 1 FROM {{ demo_library }}.CUSTOMERS WHERE CUST_ID = src.CUST_ID
+          ) WITH NC
 
     # -------------------------------------------------------------------
     # STAGE 3: BATCH JOB PROCESSING
