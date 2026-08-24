@@ -74,13 +74,18 @@
     # -------------------------------------------------------------------
     # STAGE 3: BATCH JOB PROCESSING
     # -------------------------------------------------------------------
+
     - name: "Stage 3: Submit a Batch Job to QBATCH Queue (Simulating 10s processing job)"
       ibm.power_ibmi.ibmi_submit_job:
-        cmd: "DLYJOB DLS(10)"
-        parameters: "JOB(AAP_MOCK_JOB) JOBQ(QBATCH)"
-        status: ['*COMPLETE']
+        cmd: "DLYJOB DLY(10)"  # Changed DLS to DLY
+        parameters: "JOB(AAP_MOCK) JOBQ(QBATCH)"  # Shortened job name to 8 chars (max 10)
+        status: ['*COMPLETE']   # Waits until batch job completes
         time_out: '60s'
       register: batch_result
+
+    - name: "Stage 3: Display Batch Job Status"
+      ansible.builtin.debug:
+        msg: "Batch Job Completed with Job ID: {{ batch_result.job_id }}"
 
     - name: "Stage 3: Display Batch Job Status"
       ansible.builtin.debug:
