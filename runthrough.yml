@@ -33,30 +33,19 @@
         cmd: "CRTLIB LIB({{ demo_library }}) TEXT('AAP Automation Demo Library')"
       ignore_errors: true  # Prevents failure if library already exists
 
-    - name: "Stage 2: Create Target Schema (Auto-creates required Journal)"
+    - name: "Create Target Schema (Idempotent)"
       ibm.power_ibmi.ibmi_sql_execute:
-        sql: "CREATE SCHEMA {{ demo_library }}"
-      ignore_errors: true
-
-    - name: "Stage 2: Create SQL Table inside DB2"
+        sql: "CREATE SCHEMA IF NOT EXISTS {{ demo_library }}"
+    
+    - name: "Create SQL Table inside DB2 (Idempotent)"
       ibm.power_ibmi.ibmi_sql_execute:
         sql: |
-          CREATE TABLE {{ demo_library }}.CUSTOMERS (
+          CREATE TABLE IF NOT EXISTS {{ demo_library }}.CUSTOMERS (
             CUST_ID INT PRIMARY KEY,
             CUST_NAME VARCHAR(50),
             STATUS VARCHAR(20),
             CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-          )
-      ignore_errors: true
-
-    - name: "Stage 2: Insert Sample Data into DB2 Table"
-      ibm.power_ibmi.ibmi_sql_execute:
-        sql: |
-          INSERT INTO {{ demo_library }}.CUSTOMERS (CUST_ID, CUST_NAME, STATUS) 
-          VALUES 
-            (101, 'Acme Corp', 'ACTIVE'),
-            (102, 'Globex Inc', 'PENDING'),
-            (103, 'Initech', 'ACTIVE');
+          ) WITH NC
 
     # -------------------------------------------------------------------
     # STAGE 3: BATCH JOB PROCESSING
