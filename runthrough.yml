@@ -50,12 +50,6 @@
         - create_table_out.rc != 0
         # Ignore failure if the table already exists (SQL0601)
         - "'SQL0601' not in (create_table_out.job_log | default([]) | map(attribute='MESSAGE_ID') | list)"
-
-      register: create_table_out
-      failed_when:
-        - create_table_out.rc != 0
-        # Fail ONLY IF error is NOT 'SQL0601' (Table already exists)
-        - "'SQL0601' not in (create_table_out.job_log | default([]) | map(attribute='MESSAGE_ID') | list)"
         
     - name: "Stage 2: Populate Data (Idempotent Insert with No Commit)"
       ibm.power_ibmi.ibmi_sql_execute:
@@ -82,15 +76,12 @@
 
     - name: "Stage 3: Submit a Batch Job to QBATCH Queue (Simulating 10s processing job)"
       ibm.power_ibmi.ibmi_submit_job:
-        cmd: "DLYJOB DLY(10)"  # Changed DLS to DLY
-        parameters: "JOB(AAP_MOCK) JOBQ(QBATCH)"  # Shortened job name to 8 chars (max 10)
-        status: ['*COMPLETE']   # Waits until batch job completes
+        cmd: "DLYJOB DLY(10)"
+        parameters: "JOB(AAP_MOCK) JOBQ(QBATCH)"
+        status: ['*COMPLETE']
         time_out: '60s'
+        check_interval: '5s'  # Polls every 5s instead of 1 minute
       register: batch_result
-
-    - name: "Stage 3: Display Batch Job Status"
-      ansible.builtin.debug:
-        msg: "Batch Job Completed with Job ID: {{ batch_result.job_id }}"
 
     - name: "Stage 3: Display Batch Job Status"
       ansible.builtin.debug:
