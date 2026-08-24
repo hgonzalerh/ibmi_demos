@@ -17,7 +17,7 @@
 
     - name: "Stage 1: Display IBM i Version"
       ansible.builtin.debug:
-        msg: "Target system is running IBM i Version {{ ibmi_facts_out }}"
+        msg: "Target system is running IBM i Version {{ ibmi_facts_out.ansible_facts.os_level }}"
 
     - name: "Stage 1: Check System Status (CL Command)"
       ibm.power_ibmi.ibmi_cl_command:
@@ -25,13 +25,18 @@
       register: syssts_out
 
     # -------------------------------------------------------------------
-    # STAGE 2: DATABASE CREATION & INGESTION (Idempotent SQL)
+    # STAGE 2: DATABASE CREATION & INGESTION
     # -------------------------------------------------------------------
     - name: "Stage 2: Create Target Schema (Auto-creates Library and Journaling)"
       ibm.power_ibmi.ibmi_sql_execute:
-        sql: "CREATE SCHEMA IF NOT EXISTS {{ demo_library }}"
+        sql: "CREATE SCHEMA {{ demo_library }}"
+      register: create_schema_out
+      failed_when:
+        - create_schema_out.rc != 0
+        # Fail ONLY IF error is NOT 'SQL0601' (Schema already exists)
+        - "'SQL0601' not in (create_schema_out.job_log | default([]) | map(attribute='MESSAGE_ID') | list)"
 
-    - name: "Stage 2: Create SQL Table inside DB2"
+    - name: "Stage 2: Create SQL Table inside DB2 (Idempotent)"
       ibm.power_ibmi.ibmi_sql_execute:
         sql: |
           CREATE TABLE IF NOT EXISTS {{ demo_library }}.CUSTOMERS (
@@ -61,9 +66,9 @@
     # -------------------------------------------------------------------
     - name: "Stage 3: Submit a Batch Job to QBATCH Queue (Simulating 10s processing job)"
       ibm.power_ibmi.ibmi_submit_job:
-        cmd: "DLYJOB DLS(10)"  # Delay job command acts as a mock batch workload
+        cmd: "DLYJOB DLS(10)"
         parameters: "JOB(AAP_MOCK_JOB) JOBQ(QBATCH)"
-        status: ['*COMPLETE']   # Waits until batch job completes
+        status: ['*COMPLETE']
         time_out: '60s'
       register: batch_result
 
@@ -86,7 +91,12 @@
     # -------------------------------------------------------------------
     # STAGE 5: CLEANUP (OPTIONAL)
     # -------------------------------------------------------------------
-    - name: "Stage 5: Delete Demo Schema & Library (Idempotent Cleanup)"
+    - name: "Stage 5: Delete Demo Schema & Library (Cleanup)"
       ibm.power_ibmi.ibmi_sql_execute:
-        sql: "DROP SCHEMA IF EXISTS {{ demo_library }} CASCADE"
+        sql: "DROP SCHEMA {{ demo_library }} CASCADE"
+      register: drop_schema_out
       when: clean_up | default(false) | bool
+      failed_when:
+        - drop_schema_out.rc != 0
+        # Ignore error if schema does not exist when cleaning up
+        - "'SQL0204' not in (drop_schema_out.job_log | default([]) | map(attribute='MESSAGE_ID') | list)"
