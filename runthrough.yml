@@ -33,6 +33,11 @@
         cmd: "CRTLIB LIB({{ demo_library }}) TEXT('AAP Automation Demo Library')"
       ignore_errors: true  # Prevents failure if library already exists
 
+    - name: "Stage 2: Create Target Schema (Auto-creates required Journal)"
+      ibm.power_ibmi.ibmi_sql_execute:
+        sql: "CREATE SCHEMA {{ demo_library }}"
+      ignore_errors: true
+
     - name: "Stage 2: Create SQL Table inside DB2"
       ibm.power_ibmi.ibmi_sql_execute:
         sql: |
