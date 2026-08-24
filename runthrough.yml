@@ -36,15 +36,20 @@
         # Fail ONLY IF error is NOT 'SQL0601' (Schema already exists)
         - "'SQL0601' not in (create_schema_out.job_log | default([]) | map(attribute='MESSAGE_ID') | list)"
 
-    - name: "Stage 2: Create SQL Table inside DB2 (Idempotent)"
+    - name: "Stage 2: Create SQL Table inside DB2"
       ibm.power_ibmi.ibmi_sql_execute:
         sql: |
-          CREATE TABLE IF NOT EXISTS {{ demo_library }}.CUSTOMERS (
+          CREATE TABLE {{ demo_library }}.CUSTOMERS (
             CUST_ID INT PRIMARY KEY,
             CUST_NAME VARCHAR(50),
             STATUS VARCHAR(20),
             CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP
           )
+      register: create_table_out
+      failed_when:
+        - create_table_out.rc != 0
+        # Ignore failure if the table already exists (SQL0601)
+        - "'SQL0601' not in (create_table_out.job_log | default([]) | map(attribute='MESSAGE_ID') | list)"
 
       register: create_table_out
       failed_when:
