@@ -70,6 +70,11 @@
           WHERE NOT EXISTS (
             SELECT 1 FROM {{ demo_library }}.CUSTOMERS WHERE CUST_ID = src.CUST_ID
           ) WITH NC
+      register: populate_out
+      failed_when:
+        - populate_out.rc != 0
+        # Ignore failure if 0 rows were inserted due to existing records (SQLSTATE 02000 / SQLCODE 100)
+        - "'02000' not in populate_out.stderr"
 
     # -------------------------------------------------------------------
     # STAGE 3: BATCH JOB PROCESSING
